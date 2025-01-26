@@ -81,6 +81,7 @@ class Utilities:
             
             print(f"New simulation initialized in: {args.save_dir}")
             print(f"Configuration saved to: {config_path}")
+            return config  # Return created config
 
         except Exception as e:
             print(f"Error creating simulation: {str(e)}")
@@ -101,6 +102,7 @@ class Utilities:
             print(f"Date Range: {config.start_date} to {config.end_date}")
             print(f"Population: {config.population} traders")
             print(f"Survival Rate: {config.survival_rate*100}%")
+            return config  # Return loaded config
 
         except Exception as e:
             print(f"Error loading simulation: {str(e)}")
