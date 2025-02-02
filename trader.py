@@ -17,7 +17,7 @@ class Trader:
 
     def _create_random_network(self):
         """Generate neural network with random architecture"""
-        hidden_layers = np.random.choice([0, 1, 2], p=[0.2, 0.5, 0.3])
+        hidden_layers = np.random.choice([10, 20, 30], p=[0.2, 0.5, 0.3])
         layer_sizes = [8]  # Input layer
         for _ in range(hidden_layers):
             layer_sizes.append(np.random.choice([4, 8, 16]))
