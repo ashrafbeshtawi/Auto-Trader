@@ -4,6 +4,8 @@ import numpy as np
 import pandas as pd
 from datetime import datetime
 from trader import Trader
+import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
 
 # Constants
 GENERATION_FILE = "generation.pkl"
@@ -14,8 +16,63 @@ class TradingEnvironment:
         self.dataset = None
         self.current_generation = 0
         self.population = []
+        self.best_trader_history = []
         self.load_initial_generation()
+        self.setup_visualization()
+
+    def setup_visualization(self):
+        """Initialize interactive plot"""
+        plt.ion()  # Turn on interactive mode
+        self.fig, self.ax = plt.subplots(figsize=(12, 6))
+        self.price_line, = self.ax.plot([], [], label='Price', color='#1f77b4')
+        self.buy_scatter = self.ax.scatter([], [], c='green', label='Buys')
+        self.sell_scatter = self.ax.scatter([], [], c='red', label='Sells')
         
+        self.ax.set_title('Best Trader Actions - Generation 0')
+        self.ax.set_xlabel('Date')
+        self.ax.set_ylabel('Price (USD)')
+        self.ax.legend()
+        plt.tight_layout()
+
+    def update_visualization(self):
+        """Update plot with latest best trader data"""
+        if not self.best_trader_history:
+            return
+
+        # Get latest best trader
+        best_trader = self.best_trader_history[-1]
+        # Extract trade data
+        dates = [t['date'] for t in best_trader.trade_history]
+        prices = [t['price'] for t in best_trader.trade_history]
+        actions = [t['action'] for t in best_trader.trade_history]
+
+
+        # Convert dates to matplotlib format
+        dates = [datetime.strptime(d, '%Y-%m-%d') for d in dates]
+        
+        # Update plot data
+        self.price_line.set_data(dates, prices)
+        self.ax.relim()
+        self.ax.autoscale_view()
+        
+        # Update buy/sell markers
+        buy_dates = [d for d, a in zip(dates, actions) if a > 0]
+        buy_prices = [p for p, a in zip(prices, actions) if a > 0]
+        sell_dates = [d for d, a in zip(dates, actions) if a < 0]
+        sell_prices = [p for p, a in zip(prices, actions) if a < 0]
+
+        if buy_dates and buy_prices:  # Only update if there are buys
+            self.buy_scatter.set_offsets(np.array(list(zip(buy_dates, buy_prices))))
+        if sell_dates and sell_prices:  # Only update if there are sells
+            self.sell_scatter.set_offsets(np.array(list(zip(sell_dates, sell_prices))))
+
+        # Update title
+        self.ax.set_title(f'Best Trader Actions - Generation {self.current_generation}')
+        
+        # Redraw
+        self.fig.canvas.draw_idle()
+        plt.pause(0.1)  # Small pause to allow GUI update
+
     def load_initial_generation(self):
         """Load existing generation or create new population"""
         gen_path = os.path.join(self.config.save_dir, GENERATION_FILE)
@@ -61,6 +118,7 @@ class TradingEnvironment:
         # Daily trading simulation
         for _, row in self.dataset.iterrows():
             price = row['Price_Float']
+            date = row['Date']
             features = {
                 'sin_month': row['sin_month'],
                 'cos_month': row['cos_month'],
@@ -74,12 +132,13 @@ class TradingEnvironment:
 
             for trader in self.population:
                 action = trader.decide(features)
-                trader.execute_trade(action, price)
+                trader.execute_trade(action, price, date)
 
         # Finalize by selling all BTC
         final_price = self.dataset.iloc[-1]['Price_Float']
+        final_date = self.dataset.iloc[-1]['Date']
         for trader in self.population:
-            trader.sell_all(final_price)
+            trader.sell_all(final_price, final_date)
 
     def evaluate_and_evolve(self):
         """Perform genetic algorithm operations"""
@@ -101,14 +160,16 @@ class TradingEnvironment:
         self.current_generation += 1
 
     def clone_and_mutate(self, parent):
-        """Create mutated copy of a trader"""
         child = Trader.deserialize(parent.serialize())
         
-        # Mutate neural network
-        mutation_rate = 0.3 - (0.2 * (self.current_generation / 100))
+        # Dynamic mutation based on diversity
+        current_diversity = np.std([t.total_wealth for t in self.population])
+        base_rate = 0.5 if current_diversity < 100 else 0.3
+        mutation_rate = base_rate * (1 - (self.current_generation / 200))
+        
         child.network.mutate(
-            mutation_rate=min(0.5, mutation_rate),
-            mutation_scale=0.2
+            mutation_rate=max(0.1, mutation_rate),  # Never drop below 10%
+            mutation_scale=0.2 + (0.3 * (current_diversity < 100))  # Boost scale when diversity low
         )
         return child
 
@@ -143,6 +204,12 @@ class TradingEnvironment:
                 print(f"Best: ${max(wealths):.2f}")
                 print(f"Average: ${np.mean(wealths):.2f}")
                 print(f"Worst: ${min(wealths):.2f}")
+
+                # update animation
+                best_trader = max(self.population, key=lambda x: x.total_wealth)
+                self.best_trader_history.append(best_trader)
+                self.update_visualization()
+
 
                 # Evolve population
                 self.evaluate_and_evolve()

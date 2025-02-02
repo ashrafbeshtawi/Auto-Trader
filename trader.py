@@ -39,7 +39,7 @@ class Trader:
         inputs = np.array([market_features[k] for k in feature_order], dtype=np.float32)
         return self.network.predict(inputs)
 
-    def execute_trade(self, action, current_price):
+    def execute_trade(self, action, current_price, date):
         """
         Execute trade based on neural network's decision
         action: Value between -1 (sell all) to 1 (buy all)
@@ -59,14 +59,15 @@ class Trader:
         
         self.total_wealth = self.fiat_balance + (self.btc_balance * current_price)
         self.trade_history.append({
+            'date': date.strftime('%Y-%m-%d'),
             'action': action,
             'price': current_price,
             'wealth_change': self.total_wealth - previous_wealth
         })
 
-    def sell_all(self, current_price):
+    def sell_all(self, current_price, date):
         """Convert all BTC to fiat"""
-        self.execute_trade(-1.0, current_price)
+        self.execute_trade(-1.0, current_price, date)
 
     def serialize(self):
         """Convert trader state to serializable format"""
