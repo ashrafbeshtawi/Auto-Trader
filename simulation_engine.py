@@ -6,17 +6,21 @@ from datetime import datetime
 from trader import Trader
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
+import matplotlib.dates as mdates
+import time
+
 
 # Constants
 GENERATION_FILE = "generation.pkl"
 
 class TradingEnvironment:
-    def __init__(self, config):
+    def __init__(self, config, test_mode=False):
         self.config = config
         self.dataset = None
         self.current_generation = 0
         self.population = []
         self.best_trader_history = []
+        self.test_mode = test_mode
         self.load_initial_generation()
         self.setup_visualization()
 
@@ -91,14 +95,15 @@ class TradingEnvironment:
     def load_dataset(self):
         """Load and filter dataset"""
         try:
-            df = pd.read_csv(self.config.dataset_path, parse_dates=['Date'])
+            self.dataset = pd.read_csv(self.config.dataset_path, parse_dates=['Date'])
             start_date = pd.to_datetime(self.config.start_date)
             end_date = pd.to_datetime(self.config.end_date)
             
-            self.dataset = df[
-                (df['Date'] >= start_date) & 
-                (df['Date'] <= end_date)
-            ].sort_values('Date').reset_index(drop=True)
+            if not self.test_mode:
+                self.dataset = self.dataset[
+                    (self.dataset['Date'] >= start_date) & 
+                    (self.dataset['Date'] <= end_date)
+                ].sort_values('Date').reset_index(drop=True)
             
             print(f"Loaded {len(self.dataset)} trading days")
             return True
@@ -139,6 +144,73 @@ class TradingEnvironment:
         final_date = self.dataset.iloc[-1]['Date']
         for trader in self.population:
             trader.sell_all(final_price, final_date)
+
+    def test_single_trader(self, trader):
+        """Test a single trader on the full dataset"""
+        trader.fiat_balance = 1000.0
+        trader.btc_balance = 0.0
+        trader.total_wealth = 1000.0
+        trader.trade_history = []
+
+        for _, row in self.dataset.iterrows():
+            price = row['Price_Float']
+            date = row['Date']
+            features = {
+                'sin_month': row['sin_month'],
+                'cos_month': row['cos_month'],
+                'sin_doy': row['sin_doy'],
+                'cos_doy': row['cos_doy'],
+                'sin_dow': row['sin_dow'],
+                'cos_dow': row['cos_dow'],
+                'year_scaled': row['Year_Scaled'],
+                'fear_greed': row['FearGreed_Scaled']
+            }
+
+            action = trader.decide(features)
+            trader.execute_trade(action, price, date)
+
+        final_price = self.dataset.iloc[-1]['Price_Float']
+        final_date = self.dataset.iloc[-1]['Date']
+        trader.sell_all(final_price, final_date)
+        ## Visualize the trading actions
+        dates = [datetime.strptime(item['date'], "%Y-%m-%d") for item in trader.trade_history]
+        prices = [item['price'] for item in trader.trade_history]
+        actions = [item['action'] for item in trader.trade_history]
+
+        # Create lists for buy and sell markers along with their prices
+        buy_dates = [dates[i] for i, a in enumerate(actions) if a == 1.0]
+        buy_prices = [prices[i] for i, a in enumerate(actions) if a == 1.0]
+        sell_dates = [dates[i] for i, a in enumerate(actions) if a == -1.0]
+        sell_prices = [prices[i] for i, a in enumerate(actions) if a == -1.0]
+
+        # Create the figure and axis.
+        fig, ax = plt.subplots(figsize=(12, 6))
+
+        # Plot the price as a blue line.
+        ax.plot(dates, prices, label='Price', color='blue', linewidth=2)
+
+        # Plot buy actions using upward triangles.
+        ax.scatter(buy_dates, buy_prices, marker='^', color='green', label='Buy',
+                s=100, edgecolors='k', zorder=3)
+
+        # Plot sell actions using downward triangles.
+        ax.scatter(sell_dates, sell_prices, marker='v', color='red', label='Sell',
+                s=100, edgecolors='k', zorder=3)
+
+        # Format the x-axis to display dates nicely.
+        ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
+        ax.xaxis.set_major_locator(mdates.AutoDateLocator())
+        fig.autofmt_xdate()  # Rotate date labels for clarity
+
+        # Add labels, title, legend, and grid.
+        ax.set_xlabel("Date")
+        ax.set_ylabel("Price (USD)")
+        ax.set_title("Trading Actions and Price Over Time")
+        ax.legend()
+        ax.grid(True, linestyle='--', alpha=0.5)
+
+        # Display the plot in a blocking way.
+        plt.show()
 
     def evaluate_and_evolve(self):
         """Perform genetic algorithm operations"""
@@ -193,30 +265,37 @@ class TradingEnvironment:
             return
 
         try:
-            while True:
-                print(f"\n=== Generation {self.current_generation} ===")
-                
-                # Run trading simulation
-                self.run_generation()
-                
-                # Show performance stats
-                wealths = [t.total_wealth for t in self.population]
-                print(f"Best: ${max(wealths):.2f}")
-                print(f"Average: ${np.mean(wealths):.2f}")
-                print(f"Worst: ${min(wealths):.2f}")
-
-                # update animation
+            if self.test_mode:
                 best_trader = max(self.population, key=lambda x: x.total_wealth)
-                self.best_trader_history.append(best_trader)
-                self.update_visualization()
+                self.test_single_trader(best_trader)
+                print(f"Trader Wealth: ${best_trader.total_wealth:.2f}")
+                while True:
+                    self.update_visualization()
+            else:
+                while True:
+                    print(f"\n=== Generation {self.current_generation} ===")
+                    
+                    # Run trading simulation
+                    self.run_generation()
+                    
+                    # Show performance stats
+                    wealths = [t.total_wealth for t in self.population]
+                    print(f"Best: ${max(wealths):.2f}")
+                    print(f"Average: ${np.mean(wealths):.2f}")
+                    print(f"Worst: ${min(wealths):.2f}")
+
+                    # update animation
+                    best_trader = max(self.population, key=lambda x: x.total_wealth)
+                    self.best_trader_history.append(best_trader)
+                    self.update_visualization()
 
 
-                # Evolve population
-                self.evaluate_and_evolve()
-                
-                # Save progress
-                if self.current_generation % self.config.gen_save_interval == 0:
-                    self.save_generation()
+                    # Evolve population
+                    self.evaluate_and_evolve()
+                    
+                    # Save progress
+                    if self.current_generation % self.config.gen_save_interval == 0:
+                        self.save_generation()
 
         except KeyboardInterrupt:
             self.save_generation()

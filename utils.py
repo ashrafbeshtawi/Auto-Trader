@@ -60,6 +60,7 @@ class Utilities:
         # Load simulation parser
         load_parser = subparsers.add_parser('load', aliases=['-l'], help='Load existing simulation')
         load_parser.add_argument('save_dir', help='Directory containing simulation data')
+        load_parser.add_argument('--test-phase', default=False, help='Enable test-phase mode (default: False)')
 
         return parser
 
@@ -107,3 +108,33 @@ class Utilities:
         except Exception as e:
             print(f"Error loading simulation: {str(e)}")
             sys.exit(1)
+            
+    def str_to_bool(value: str) -> bool:
+        """
+        Convert a string representation of truth to True or False.
+
+        True values are 'true', '1', 'yes', 't'
+        False values are 'false', '0', 'no', 'f'
+        
+        Args:
+            value (str): The string to convert.
+        
+        Returns:
+            bool: The corresponding boolean value.
+        
+        Raises:
+            ValueError: If the string cannot be converted to a boolean.
+        """
+        if isinstance(value, bool):
+            return value  # Already a boolean, no conversion needed.
+
+        value_lower = value.strip().lower()
+        true_values = ('true', '1', 'yes', 't')
+        false_values = ('false', '0', 'no', 'f')
+
+        if value_lower in true_values:
+            return True
+        elif value_lower in false_values:
+            return False
+        else:
+            raise ValueError(f"Cannot convert string '{value}' to a boolean.")
