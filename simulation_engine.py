@@ -7,7 +7,6 @@ from trader import Trader
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 import matplotlib.dates as mdates
-import time
 
 
 # Constants
@@ -208,8 +207,7 @@ class TradingEnvironment:
         ax.set_title("Trading Actions and Price Over Time")
         ax.legend()
         ax.grid(True, linestyle='--', alpha=0.5)
-
-        # Display the plot in a blocking way.
+        plt.ioff()
         plt.show()
 
     def evaluate_and_evolve(self):
@@ -269,8 +267,6 @@ class TradingEnvironment:
                 best_trader = max(self.population, key=lambda x: x.total_wealth)
                 self.test_single_trader(best_trader)
                 print(f"Trader Wealth: ${best_trader.total_wealth:.2f}")
-                while True:
-                    self.update_visualization()
             else:
                 while True:
                     print(f"\n=== Generation {self.current_generation} ===")
