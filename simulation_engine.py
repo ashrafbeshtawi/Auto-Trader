@@ -21,7 +21,8 @@ class TradingEnvironment:
         self.best_trader_history = []
         self.test_mode = test_mode
         self.load_initial_generation()
-        self.setup_visualization()
+        if not self.test_mode:
+            self.setup_visualization()
 
     def setup_visualization(self):
         """Initialize interactive plot"""
@@ -176,39 +177,36 @@ class TradingEnvironment:
         prices = [item['price'] for item in trader.trade_history]
         actions = [item['action'] for item in trader.trade_history]
 
-        # Create lists for buy and sell markers along with their prices
-        buy_dates = [dates[i] for i, a in enumerate(actions) if a == 1.0]
-        buy_prices = [prices[i] for i, a in enumerate(actions) if a == 1.0]
-        sell_dates = [dates[i] for i, a in enumerate(actions) if a == -1.0]
-        sell_prices = [prices[i] for i, a in enumerate(actions) if a == -1.0]
-
-        # Create the figure and axis.
+        # Create figure matching main visualization style
         fig, ax = plt.subplots(figsize=(12, 6))
+        
+        # Price line (match original color and style)
+        price_line, = ax.plot(dates, prices, label='Price', color='#1f77b4', zorder=1)
+        
+        # Buy/sell markers (match original style)
+        buy_dates = [dates[i] for i, a in enumerate(actions) if a > 0]
+        buy_prices = [prices[i] for i, a in enumerate(actions) if a > 0]
+        sell_dates = [dates[i] for i, a in enumerate(actions) if a < 0]
+        sell_prices = [prices[i] for i, a in enumerate(actions) if a < 0]
 
-        # Plot the price as a blue line.
-        ax.plot(dates, prices, label='Price', color='blue', linewidth=2)
+        buy_scatter = ax.scatter(buy_dates, buy_prices, c='green', label='Buys', 
+                            s=60, edgecolors='k', zorder=2)
+        sell_scatter = ax.scatter(sell_dates, sell_prices, c='red', label='Sells',
+                                s=60, edgecolors='k', zorder=2)
 
-        # Plot buy actions using upward triangles.
-        ax.scatter(buy_dates, buy_prices, marker='^', color='green', label='Buy',
-                s=100, edgecolors='k', zorder=3)
-
-        # Plot sell actions using downward triangles.
-        ax.scatter(sell_dates, sell_prices, marker='v', color='red', label='Sell',
-                s=100, edgecolors='k', zorder=3)
-
-        # Format the x-axis to display dates nicely.
+        # Formatting to match original plot
+        ax.set_title('Best Trader Actions - Test Mode')
+        ax.set_xlabel('Date')
+        ax.set_ylabel('Price (USD)')
+        ax.legend()
+        
+        # Date formatting
         ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
         ax.xaxis.set_major_locator(mdates.AutoDateLocator())
-        fig.autofmt_xdate()  # Rotate date labels for clarity
-
-        # Add labels, title, legend, and grid.
-        ax.set_xlabel("Date")
-        ax.set_ylabel("Price (USD)")
-        ax.set_title("Trading Actions and Price Over Time")
-        ax.legend()
-        ax.grid(True, linestyle='--', alpha=0.5)
-        plt.ioff()
-        plt.show()
+        fig.autofmt_xdate()
+        
+        plt.tight_layout()
+        plt.show(block=True)  # Ensure plot stays open
 
     def evaluate_and_evolve(self):
         """Perform genetic algorithm operations"""
